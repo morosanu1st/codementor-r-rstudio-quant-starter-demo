@@ -1,0 +1,9 @@
+output/
+*.html
+quant_starter_files/
+.Rhistory
+.RData
+.Rproj.user/
+renv/library/
+renv/staging/
+Rplots.pdf
