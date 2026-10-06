@@ -1,0 +1,102 @@
+---
+title: "R for quant research: week 1 starter"
+output:
+  html_document:
+    toc: true
+    df_print: paged
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+source("R/00_setup_packages.R")
+```
+
+## 0. Check your setup
+
+Run this first. If something fails later, paste this output when you ask for help.
+
+```{r env}
+report_environment()
+pkg_ok <- ensure_packages("ggplot2")   # use upgrade_old = TRUE right after upgrading R
+has_ggplot <- isTRUE(pkg_ok[["ggplot2"]])
+```
+
+## 1. Data frames
+
+```{r dataframes}
+portfolio <- data.frame(
+  ticker = c("ALPHA", "BETA", "GAMMA"),
+  sector = c("Tech", "Energy", "Utilities"),
+  weight = c(0.5, 0.3, 0.2)
+)
+str(portfolio)
+portfolio[portfolio$weight > 0.25, ]          # filter rows
+portfolio[order(-portfolio$weight), ]         # sort
+
+prices <- read.csv("data/prices.csv")
+prices$date <- as.Date(prices$date)
+head(prices)
+summary(prices)
+```
+
+## 2. Simple returns
+
+$r_t = \frac{P_t}{P_{t-1}} - 1$, computed separately for each ticker.
+
+```{r returns}
+prices <- prices[order(prices$ticker, prices$date), ]
+prices$ret <- ave(prices$close, prices$ticker,
+                  FUN = function(p) c(NA, p[-1] / p[-length(p)] - 1))
+head(prices[prices$ticker == "BETA", ], 5)
+```
+
+## 3. Summary statistics
+
+```{r stats}
+stats <- do.call(rbind, lapply(split(prices, prices$ticker), function(d) {
+  r <- na.omit(d$ret)
+  data.frame(ticker = d$ticker[1],
+             mean_daily = mean(r), sd_daily = sd(r),
+             ann_vol = sd(r) * sqrt(252),
+             total_return = d$close[nrow(d)] / d$close[1] - 1)
+}))
+knitr::kable(stats, digits = 4, row.names = FALSE)
+```
+
+## 4. Bar chart (ggplot2, with a base-R fallback)
+
+```{r bar, fig.width = 6, fig.height = 4}
+if (has_ggplot) {
+  ggplot(stats, aes(x = ticker, y = total_return * 100, fill = total_return > 0)) +
+    geom_col(width = 0.6, show.legend = FALSE) +
+    scale_fill_manual(values = c(`TRUE` = "#2E7D32", `FALSE` = "#C62828")) +
+    labs(title = "Total return over the sample", x = NULL, y = "Return (%)") +
+    theme_minimal()
+} else {
+  barplot(stats$total_return * 100, names.arg = stats$ticker,
+          col = ifelse(stats$total_return > 0, "#2E7D32", "#C62828"),
+          main = "Total return over the sample (base R)", ylab = "Return (%)")
+  abline(h = 0)
+}
+```
+
+Count-style bar chart, the classic first ggplot2 exercise:
+
+```{r bar-count, fig.width = 6, fig.height = 3}
+up_days <- data.frame(ticker = prices$ticker, direction = ifelse(prices$ret > 0, "up", "down"))
+up_days <- up_days[!is.na(up_days$direction), ]
+if (has_ggplot) {
+  ggplot(up_days, aes(x = ticker, fill = direction)) +
+    geom_bar(position = "dodge") +
+    labs(title = "Up vs down days", y = "Days") + theme_minimal()
+} else {
+  barplot(table(up_days$direction, up_days$ticker), beside = TRUE, legend.text = TRUE,
+          main = "Up vs down days (base R)", ylab = "Days")
+}
+```
+
+## 5. Session info
+
+```{r session}
+sessionInfo()
+```
